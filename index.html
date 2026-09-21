@@ -116,14 +116,21 @@ textarea{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line)
 .seg button.on{border-color:var(--accent)}
 .tagbox{display:flex;flex-wrap:wrap;gap:8px;min-height:8px}
 .tg{padding:8px 13px;border-radius:18px;background:var(--panel2);font-size:14px;border:2px solid transparent}
+.tgw{display:inline-flex}
+.tgw .tg{border-radius:18px 0 0 18px;padding-right:9px}
+.tx{padding:8px 11px 8px 4px;border-radius:0 18px 18px 0;background:var(--panel2);color:var(--sub);font-size:15px;line-height:1}
 .tg.on{background:var(--c);color:#10141a;font-weight:700}
+.tg.on+.tx{background:var(--c);color:#10141a}
 .addtag{display:flex;gap:8px;margin-top:10px}
 .addtag input{flex:1;padding:9px 12px;font-size:14px}
 .addtag button{padding:0 16px;border-radius:10px;background:var(--panel2);font-weight:600}
-.tagstats{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0;justify-content:center}
+.tagstats{display:flex;flex-direction:column;gap:6px;margin:14px 0 0}
 .tagstats:empty{display:none}
-.tagstats span{font-size:12px;padding:6px 11px;border-radius:14px;background:var(--panel)}
-.tagstats b{color:var(--c)}
+.tshead{font-size:13px;color:var(--sub);font-weight:600;margin:0 4px 2px}
+.tsrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:14px;align-items:center;background:var(--panel);border-radius:12px;padding:10px 14px;font-size:12px;color:var(--sub)}
+.tsrow .tn{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tsrow span{white-space:nowrap}
+.tsrow b{color:var(--c);font-size:14px;font-variant-numeric:tabular-nums}
 .nd{position:absolute;bottom:4px;left:50%;margin-left:-2px;width:5px;height:5px;border-radius:50%;background:var(--sub);z-index:2}
 .tbtn.note{font-size:15px;position:relative}
 .tbtn.note.has::after{content:"";position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--c)}
@@ -419,27 +426,57 @@ function bindCell(cell,h,key){
   cell.addEventListener('click',()=>{if(fired){fired=false;return}cycle(h,key)});
 }
 
+function tagStreaks(h,name){
+  const days=[];
+  for(const k in h.notes)if((h.notes[k].tags||[]).includes(name))days.push(dayNum(k));
+  days.sort((a,b)=>a-b);
+  const set=new Set(days);
+  let best=0,run=0,prev=null;
+  for(const d of days){run=(prev!==null&&d===prev+1)?run+1:1;best=Math.max(best,run);prev=d}
+  const t=dayNum(todayStr());
+  let d=set.has(t)?t:t-1,cur=0;
+  while(set.has(d)){cur++;d--}
+  return {cur,best};
+}
+
 function renderTagStats(h){
   const box=$('tagStats');box.textContent='';
   const pre=view.getFullYear()+'-'+pad(view.getMonth()+1)+'-';
   const count={};
   h.tags.forEach(t=>count[t]=0);
   for(const k in h.notes){
-    if(k.indexOf(pre)!==0)continue;
-    (h.notes[k].tags||[]).forEach(t=>{count[t]=(count[t]||0)+1});
+    (h.notes[k].tags||[]).forEach(t=>{if(!(t in count))count[t]=0});
+    if(k.indexOf(pre)===0)(h.notes[k].tags||[]).forEach(t=>{count[t]++});
   }
   const names=Object.keys(count);
   if(!names.length)return;
   box.style.setProperty('--c',h.color);
+  box.append(el('div','tshead','세부 항목별 기록'));
   names.forEach(n=>{
-    const sp=el('span');
-    sp.append(document.createTextNode(n+' '));
-    sp.append(el('b',null,count[n]+'일'));
-    box.append(sp);
+    const st=tagStreaks(h,n);
+    const row=el('div','tsrow');
+    row.append(el('span','tn',n));
+    [['이달',count[n]],['🔥 연속',st.cur],['최장',st.best]].forEach(([label,val])=>{
+      const sp=el('span',null,label+' ');
+      sp.append(el('b',null,val+'일'));
+      row.append(sp);
+    });
+    box.append(row);
   });
 }
 
 /* ---------- 하루 상세(세부 항목·메모) ---------- */
+function usedCount(h,name){
+  let n=0;for(const k in h.notes)if((h.notes[k].tags||[]).includes(name))n++;return n;
+}
+function purgeTag(h,name){
+  h.tags=h.tags.filter(t=>t!==name);
+  for(const k in h.notes){
+    const n=h.notes[k];
+    n.tags=(n.tags||[]).filter(t=>t!==name);
+    if(!n.tags.length&&!n.memo)delete h.notes[k];
+  }
+}
 let dayCtx=null;
 function openDayDlg(h,key){
   const nt=h.notes[key]||{};
@@ -462,9 +499,20 @@ function drawDay(){
   const box=$('dayTags');box.textContent='';
   if(!c.extra.length){box.append(el('span','note','아직 세부 항목이 없어요. 아래에서 추가해 보세요.'))}
   c.extra.forEach(t=>{
+    const w=el('span','tgw');
     const b=el('button','tg'+(c.tags.has(t)?' on':''),t);
     b.onclick=()=>{if(c.tags.has(t))c.tags.delete(t);else{c.tags.add(t);c.mark=1}drawDay()};
-    box.append(b);
+    const x=el('button','tx','×');
+    x.setAttribute('aria-label',t+' 삭제');
+    x.onclick=()=>{
+      const n=usedCount(c.h,t);
+      const msg='"'+t+'" 세부 항목을 삭제할까요?'+(n?' 기록된 '+n+'일에서도 사라집니다. (O/X 기록은 유지)':'');
+      if(!confirm(msg))return;
+      purgeTag(c.h,t);
+      c.extra=c.extra.filter(v=>v!==t);c.tags.delete(t);
+      save();render();drawDay();
+    };
+    w.append(b,x);box.append(w);
   });
 }
 $('daySeg').addEventListener('click',e=>{
@@ -552,7 +600,13 @@ $('hSave').onclick=()=>{
   const name=$('hName').value.trim();
   if(!name){$('hName').focus();return}
   const tags=[...new Set($('hTags').value.split(',').map(t=>t.trim()).filter(Boolean))].slice(0,12);
-  if(editing){editing.name=name;editing.color=pickedColor;editing.tags=tags}
+  if(editing){
+    const removed=editing.tags.filter(t=>!tags.includes(t));
+    const used=removed.filter(t=>usedCount(editing,t)>0);
+    if(used.length&&!confirm('삭제한 세부 항목('+used.join(', ')+')은 기록된 날짜에서도 사라집니다. 계속할까요?'))return;
+    removed.forEach(t=>purgeTag(editing,t));
+    editing.name=name;editing.color=pickedColor;editing.tags=tags;
+  }
   else{
     const h={id:'h'+Date.now().toString(36),name,color:pickedColor,marks:{},notes:{},tags,created:todayStr()};
     state.habits.push(h);state.selected=h.id;
