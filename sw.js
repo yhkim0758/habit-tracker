@@ -1,5 +1,5 @@
-const CACHE = 'habit-tracker-v1';
-const FILES = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
+const CACHE = 'habit-tracker-v2';
+const FILES = ['./sync.js', './firebase-config.js', './', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
