@@ -1,4 +1,4 @@
-const CACHE = 'habit-tracker-v2';
+const CACHE = 'habit-tracker-v3';
 const FILES = ['./sync.js', './firebase-config.js', './', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
