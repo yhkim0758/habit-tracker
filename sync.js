@@ -29,7 +29,11 @@ async function start() {
     for (const h of (remote.habits || [])) byId.set(h.id, { ...h, marks: { ...h.marks } });
     for (const h of local.habits) {
       const r = byId.get(h.id);
-      if (r) r.marks = { ...h.marks, ...r.marks };
+      if (r) {
+        r.marks = { ...h.marks, ...r.marks };
+        r.notes = { ...(h.notes || {}), ...(r.notes || {}) };
+        r.tags = [...new Set([...(r.tags || []), ...(h.tags || [])])];
+      }
       else byId.set(h.id, { ...h, marks: { ...h.marks } });
     }
     return { habits: [...byId.values()], selected: remote.selected || local.selected };
